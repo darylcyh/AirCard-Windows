@@ -1,0 +1,36 @@
+name: Build Transit Scan Fix
+
+on:
+  push:
+    branches: [codex/transit-scan-fix]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      LOCALAPPDATA: ${{ github.workspace }}\test-profile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Test without a connected iPhone
+        run: cargo test --release --locked -- --skip test_usbmux_query --skip test_list_connected_devices
+      - name: Build Windows EXE
+        run: cargo build --release --locked
+      - name: Package executable and license
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path artifact | Out-Null
+          Copy-Item target/release/aircard.exe artifact/AirCard-Transit-Scan-Fix.exe
+          Copy-Item LICENSE,TRANSIT-SCAN-FIX.md artifact/
+          Get-FileHash artifact/AirCard-Transit-Scan-Fix.exe -Algorithm SHA256 | Format-List | Out-File artifact/SHA256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AirCard-Transit-Scan-Fix-Windows-x64
+          path: artifact/
+          if-no-files-found: error
+          retention-days: 14
