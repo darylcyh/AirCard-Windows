@@ -46,10 +46,8 @@ pub fn is_valid_card_hash(h: &str) -> bool {
         return false;
     }
 
-    // Reject strings with multiple underscores or hyphens (typical of system asset/bundle names)
-    if trimmed.chars().filter(|&c| c == '_').count() > 1 || trimmed.chars().filter(|&c| c == '-').count() > 2 {
-        return false;
-    }
+    // URL-safe Base64 hashes may contain any number of '-' and '_'.
+    // Validate their decoded contents below instead of counting these symbols.
 
     // Reject obvious system identifiers, bundle IDs and common keywords
     let lower = trimmed.to_lowercase();
@@ -408,6 +406,27 @@ mod tests {
     }
 
     #[test]
+    fn url_safe_hashes_allow_repeated_hyphens_and_underscores() {
+        // Synthetic SHA digests, never copied from a real Wallet card.
+        for hash in [
+            "9551G6bQE-yX-P9n33NWF-3AjKQ",
+            "LjGesHFp_FrY7J_0wvVWp_PoMW4",
+            "s0ngKzQN--8Vckjce1F6xBaI0oSEAamE-f6cmSR2114",
+        ] {
+            assert!(is_valid_card_hash(hash), "Valid URL-safe identifier rejected");
+            assert!(is_valid_card_hash(&format!("{hash}=")));
+        }
+    }
+
+    #[test]
+    fn syslog_extracts_sha1_with_three_hyphens() {
+        // Same identifier shape as the reported card; unrelated synthetic data.
+        let hash = "9551G6bQE-yX-P9n33NWF-3AjKQ=";
+        let line = format!("passd: observed pass {hash} updated");
+        assert_eq!(extract_card_hash_from_line(&line), Some(hash.to_string()));
+    }
+
+    #[test]
     fn test_saved_cards_purging() {
         let loaded = load_saved_cards();
         for card in &loaded {
@@ -416,6 +435,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "Requires an unlocked, trusted physical iPhone"]
     fn test_syslog_service_receive() {
         let session = match ActiveDeviceSession::open(None, ConnectionMode::Auto) {
             Ok(s) => s,
